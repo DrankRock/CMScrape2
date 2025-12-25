@@ -1,5 +1,8 @@
 # CMScrape 2
 
+## WARNING
+**THIS PROJECT ISN'T FULLY COOKED YET, MISSING ONE OR TWO COMMITS AND A RELEASE**
+
 Scrapes card prices from CardMarket. Handles Cloudflare, exports to CSV.
 
 ## Usage
