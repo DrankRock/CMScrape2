@@ -1,0 +1,25 @@
+{
+    "name": "cardmarket-scraper",
+    "version": "1.0.0",
+    "description": "CardMarket scraper with Electron UI",
+    "main": "src/main.js",
+    "scripts": {
+        "start": "electron .",
+        "dev": "electron . --dev"
+    },
+    "keywords": [
+        "cardmarket",
+        "scraper",
+        "electron"
+    ],
+    "author": "",
+    "license": "MIT",
+    "devDependencies": {
+        "electron": "^33.0.0",
+        "electron-rebuild": "^3.2.9"
+    },
+    "dependencies": {
+        "@ulixee/hero-playground": "^2.0.0-alpha.29",
+        "jsdom": "^25.0.0"
+    }
+}

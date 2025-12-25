@@ -1,0 +1,722 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline';">
+  <title>CardMarket Extraction Engine</title>
+  <style>
+    :root {
+      --bg-app: #09090b;
+      --bg-panel: #18181b;
+      --bg-surface: #27272a;
+      --bg-input: #121215;
+      --border-subtle: #27272a;
+      --border-active: #3f3f46;
+      --primary: #6366f1;
+      --primary-hover: #4f46e5;
+      --primary-glow: rgba(99, 102, 241, 0.15);
+      --text-main: #f4f4f5;
+      --text-muted: #a1a1aa;
+      --text-dim: #52525b;
+      --success: #10b981;
+      --error: #ef4444;
+      --warning: #f59e0b;
+      --font-stack: -apple-system, BlinkMacSystemFont, "Inter", "Segoe UI", Roboto, sans-serif;
+      --font-mono: "JetBrains Mono", "SF Mono", "Fira Code", monospace;
+    }
+
+    * { margin: 0; padding: 0; box-sizing: border-box; outline: none; }
+
+    body {
+      background: var(--bg-app);
+      color: var(--text-main);
+      font-family: var(--font-stack);
+      height: 100vh;
+      display: flex;
+      flex-direction: column;
+      font-size: 13px;
+      line-height: 1.5;
+      -webkit-font-smoothing: antialiased;
+    }
+
+    h1, h2, h3 { font-weight: 600; letter-spacing: -0.02em; color: var(--text-main); }
+    .label { font-size: 11px; font-weight: 600; text-transform: uppercase; color: var(--text-muted); letter-spacing: 0.05em; margin-bottom: 6px; display: block; }
+    .mono { font-family: var(--font-mono); }
+
+    ::-webkit-scrollbar { width: 6px; height: 6px; }
+    ::-webkit-scrollbar-track { background: transparent; }
+    ::-webkit-scrollbar-thumb { background: var(--bg-surface); border-radius: 3px; }
+    ::-webkit-scrollbar-thumb:hover { background: var(--border-active); }
+
+    header {
+      height: 48px;
+      border-bottom: 1px solid var(--border-subtle);
+      display: flex;
+      align-items: center;
+      padding: 0 1.5rem;
+      justify-content: space-between;
+      background: rgba(9, 9, 11, 0.8);
+      backdrop-filter: blur(8px);
+      z-index: 50;
+    }
+
+    .brand { display: flex; align-items: center; gap: 12px; font-size: 14px; font-weight: 600; }
+    .brand-icon {
+      width: 20px; height: 20px;
+      background: var(--primary);
+      border-radius: 4px;
+      box-shadow: 0 0 15px var(--primary-glow);
+    }
+
+    main {
+      flex: 1;
+      display: grid;
+      grid-template-columns: 320px 1fr;
+      overflow: hidden;
+    }
+
+    .sidebar {
+      background: var(--bg-app);
+      border-right: 1px solid var(--border-subtle);
+      display: flex;
+      flex-direction: column;
+      overflow-y: auto;
+      padding: 1.5rem;
+      gap: 2rem;
+    }
+
+    .config-section { display: flex; flex-direction: column; gap: 1rem; }
+
+    input, select, textarea {
+      background: var(--bg-input);
+      border: 1px solid var(--border-subtle);
+      color: var(--text-main);
+      padding: 8px 12px;
+      border-radius: 6px;
+      font-size: 12px;
+      font-family: inherit;
+      transition: all 0.2s ease;
+      width: 100%;
+    }
+
+    input:focus, select:focus, textarea:focus {
+      border-color: var(--primary);
+      box-shadow: 0 0 0 2px var(--primary-glow);
+    }
+
+    textarea {
+      min-height: 100px;
+      resize: vertical;
+      font-family: var(--font-mono);
+      line-height: 1.4;
+    }
+
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      padding: 8px 16px;
+      border-radius: 6px;
+      font-weight: 500;
+      font-size: 12px;
+      cursor: pointer;
+      transition: all 0.2s;
+      border: 1px solid transparent;
+    }
+
+    .btn-primary {
+      background: var(--primary);
+      color: white;
+      box-shadow: 0 1px 2px rgba(0,0,0,0.2);
+    }
+    .btn-primary:hover:not(:disabled) { background: var(--primary-hover); }
+
+    .btn-secondary {
+      background: var(--bg-surface);
+      color: var(--text-main);
+      border: 1px solid var(--border-subtle);
+    }
+    .btn-secondary:hover:not(:disabled) { border-color: var(--text-muted); }
+
+    .btn:disabled { opacity: 0.5; cursor: not-allowed; }
+
+    .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+
+    .checkbox-wrap { display: flex; align-items: center; gap: 8px; cursor: pointer; user-select: none; }
+    .checkbox-wrap input { width: auto; accent-color: var(--primary); }
+    .content-area { display: flex; flex-direction: column; background: var(--bg-app); position: relative; overflow: hidden; }
+    
+    .tabs {
+      display: flex;
+      padding: 0 1rem;
+      border-bottom: 1px solid var(--border-subtle);
+      gap: 2rem;
+    }
+
+    .tab {
+      padding: 1rem 0;
+      background: none;
+      border: none;
+      color: var(--text-muted);
+      cursor: pointer;
+      font-size: 12px;
+      font-weight: 500;
+      position: relative;
+      transition: color 0.2s;
+    }
+
+    .tab:hover { color: var(--text-main); }
+    .tab.active { color: var(--text-main); }
+    .tab.active::after {
+      content: '';
+      position: absolute;
+      bottom: -1px; left: 0; right: 0;
+      height: 2px;
+      background: var(--primary);
+    }
+
+    .view { display: none; flex: 1; overflow: hidden; flex-direction: column; }
+    .view.active { display: flex; }
+
+    #logContainer {
+      flex: 1;
+      padding: 1.5rem;
+      font-family: var(--font-mono);
+      font-size: 11px;
+      overflow-y: auto;
+      color: var(--text-muted);
+    }
+    .log-line { margin-bottom: 4px; display: flex; gap: 12px; }
+    .log-time { color: var(--text-dim); min-width: 60px; }
+    .log-msg { color: var(--text-main); }
+
+    #resultsContainer {
+      flex: 1;
+      padding: 1.5rem;
+      overflow-y: auto;
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+
+    .result-card {
+      background: var(--bg-panel);
+      border: 1px solid var(--border-subtle);
+      border-radius: 8px;
+      padding: 16px;
+      transition: border-color 0.2s;
+    }
+    .result-card:hover { border-color: var(--border-active); }
+
+    .result-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      margin-bottom: 16px;
+      padding-bottom: 12px;
+      border-bottom: 1px solid var(--border-subtle);
+    }
+    .result-url { font-size: 12px; color: var(--primary); font-family: var(--font-mono); max-width: 80%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+    .stat-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 16px; }
+    .stat-item dt { font-size: 10px; color: var(--text-muted); text-transform: uppercase; margin-bottom: 4px; letter-spacing: 0.05em; }
+    .stat-item dd { font-size: 14px; color: var(--text-main); font-weight: 500; font-variant-numeric: tabular-nums; }
+
+    .badge { padding: 2px 8px; border-radius: 12px; font-size: 10px; font-weight: 600; text-transform: uppercase; }
+    .badge-success { background: rgba(16, 185, 129, 0.1); color: var(--success); }
+    .badge-error { background: rgba(239, 68, 68, 0.1); color: var(--error); }
+
+    .summary-bar {
+      background: var(--bg-panel);
+      border-bottom: 1px solid var(--border-subtle);
+      padding: 1rem 1.5rem;
+      display: flex;
+      gap: 2rem;
+      flex-wrap: wrap;
+    }
+    .sum-metric .val { font-size: 18px; font-weight: 600; color: var(--text-main); letter-spacing: -0.02em; }
+    .sum-metric .lbl { font-size: 10px; color: var(--text-muted); text-transform: uppercase; }
+
+    footer {
+      height: 36px;
+      background: var(--bg-app);
+      border-top: 1px solid var(--border-subtle);
+      display: flex;
+      align-items: center;
+      padding: 0 1rem;
+      justify-content: space-between;
+      font-size: 11px;
+    }
+
+    .status-indicator { display: flex; align-items: center; gap: 8px; color: var(--text-muted); }
+    .status-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--text-dim); transition: all 0.3s; }
+    .status-dot.active { background: var(--success); box-shadow: 0 0 8px rgba(16, 185, 129, 0.4); }
+    .status-dot.error { background: var(--error); }
+
+    .progress-track { width: 200px; height: 4px; background: var(--bg-surface); border-radius: 2px; overflow: hidden; display: none; }
+    .progress-bar { height: 100%; background: var(--primary); width: 0%; transition: width 0.3s ease; }
+
+    .empty-state {
+      height: 100%; display: flex; align-items: center; justify-content: center;
+      color: var(--text-dim); font-size: 12px; letter-spacing: 0.05em; text-transform: uppercase;
+    }
+  </style>
+</head>
+<body>
+
+  <header>
+    <div class="brand">
+      <div class="brand-icon"></div>
+      <span>Extraction Engine</span>
+    </div>
+    <div style="font-size: 11px; color: var(--text-dim);">v2.5.0</div>
+  </header>
+
+  <main>
+    <aside class="sidebar">
+
+      <div class="config-section">
+        <label class="label">Input Source</label>
+        <textarea id="urls" placeholder="Paste CardMarket URLs..."></textarea>
+        <button id="loadUrlsBtn" class="btn btn-secondary" style="width:100%">Import .txt File</button>
+      </div>
+
+      <div class="config-section">
+        <label class="label">Configuration</label>
+
+        <select id="tcgSelect" style="margin-bottom: 8px;">
+          <option value="Any" selected>Auto-Detect (Mixed TCGs)</option>
+          <option value="Pokemon">Pokémon</option>
+          <option value="Magic">Magic: The Gathering</option>
+          <option value="YuGiOh">Yu-Gi-Oh!</option>
+          <option value="OnePiece">One Piece</option>
+          <option value="Lorcana">Lorcana</option>
+          <option value="Riftbound">Riftbound</option>
+          <option value="FleshAndBlood">Flesh And Blood</option>
+          <option value="StarWarsUnlimited">Star Wars Unlimited</option>
+          <option value="Digimon">Digimon</option>
+          <option value="DragonBallSuper">Dragon Ball Super</option>
+          <option value="Vanguard">Vanguard</option>
+          <option value="WeissSchwarz">Weiss Schwarz</option>
+          <option value="FinalFantasy">Final Fantasy</option>
+          <option value="FoW">Force of Will</option>
+          <option value="BattleSpiritsSaga">Battle Spirits Saga</option>
+          <option value="WoW">World of Warcraft TCG</option>
+          <option value="StarWarsDestiny">Star Wars Destiny</option>
+          <option value="Dragoborne">Dragoborne</option>
+          <option value="MyLittlePony">My Little Pony</option>
+          <option value="Spoils">Spoils</option>
+        </select>
+
+        <div class="grid-2">
+           <div>
+             <span class="label" style="font-size:9px;">Min Delay</span>
+             <input type="number" id="minDelay" value="3000">
+           </div>
+           <div>
+             <span class="label" style="font-size:9px;">Max Delay</span>
+             <input type="number" id="maxDelay" value="8000">
+           </div>
+        </div>
+      </div>
+
+      <div class="config-section">
+        <div class="grid-2">
+           <div>
+             <span class="label" style="font-size:9px;">CF Wait</span>
+             <input type="number" id="cfWait" value="30000">
+           </div>
+           <div>
+             <span class="label" style="font-size:9px;">Retries</span>
+             <input type="number" id="retries" value="3">
+           </div>
+        </div>
+        <label class="checkbox-wrap">
+          <input type="checkbox" id="showChrome" checked>
+          <span style="font-size: 11px; color: var(--text-muted);">Headless Mode Off</span>
+        </label>
+      </div>
+
+      <div class="config-section">
+        <label class="label">Authentication</label>
+        <input type="text" id="username" placeholder="Username" style="margin-bottom: 8px;">
+        <input type="password" id="password" placeholder="Password">
+      </div>
+
+      <div style="margin-top: auto; display: flex; flex-direction: column; gap: 12px;">
+         <div class="grid-2">
+            <input type="text" id="outputDir" value="./scraped_results" readonly style="color: var(--text-dim); cursor: default;">
+            <button id="selectOutputBtn" class="btn btn-secondary">Set Path</button>
+         </div>
+         <div class="grid-2">
+            <button id="startBtn" class="btn btn-primary">Start Extraction</button>
+            <button id="stopBtn" class="btn btn-secondary" disabled style="color: var(--error);">Stop</button>
+         </div>
+      </div>
+
+    </aside>
+
+    <div class="content-area">
+      <div class="tabs">
+        <button class="tab active" data-tab="log">Terminal</button>
+        <button class="tab" data-tab="results">Data View</button>
+      </div>
+
+      <div id="log-tab" class="view active">
+        <div id="logContainer">
+          <div class="empty-state">Waiting for task initiation...</div>
+        </div>
+      </div>
+
+      <div id="results-tab" class="view">
+        <div id="sumBanner" class="summary-bar" style="display: none;"></div>
+        <div id="resultsContainer">
+          <div class="empty-state">No Data Available</div>
+        </div>
+      </div>
+    </div>
+  </main>
+
+  <footer>
+    <div class="status-indicator">
+      <div id="statusDot" class="status-dot"></div>
+      <span id="statusText">Idle</span>
+    </div>
+    <div id="progressBar" class="progress-track">
+      <div id="progressFill" class="progress-bar"></div>
+    </div>
+  </footer>
+
+  <script>
+    // XPath config. Format: Title|xpath|tags (comma separated)
+    // Tags can be: tcg names, "any" for fallback, "sum" for totaling
+    const RAW_XPATH_CONFIG = `
+Card Title|/html/body/main/div[2]/div[1]/h1/text()
+
+Card Number|/html/body/main/div[3]/section[2]/div/div[2]/div[1]/div/div[2]/div/div[2]/dl/dd[2]|Magic, Lorcana, StarWarsUnlimited, FinalFantasy, FoW, WoW, Dragoborne, MyLittlePony, Spoils
+Card Number|/html/body/main/div[3]/section[2]/div/div[2]/div[1]/div/div[1]/div/div[2]/dl/dd[2]|Pokemon, YuGiOh, OnePiece, Riftbound, FleshAndBlood, Digimon, DragonBallSuper, Vanguard, WeissSchwarz, BattleSpiritsSaga, StarWarsDestiny
+
+Low Price|/html/body/main/div[3]/section[2]/div/div[2]/div[1]/div/div[2]/div/div[2]/dl/dd[6]|sum, Magic, Lorcana, StarWarsUnlimited, FinalFantasy, FoW, WoW, Dragoborne, MyLittlePony, Spoils
+Low Price|/html/body/main/div[3]/section[2]/div/div[2]/div[1]/div/div[1]/div/div[2]/dl/dd[6]|Pokemon, YuGiOh, OnePiece, Riftbound, FleshAndBlood, Digimon, DragonBallSuper, Vanguard, WeissSchwarz, BattleSpiritsSaga, StarWarsDestiny
+
+Trend Price|/html/body/main/div[3]/section[2]/div/div[2]/div[1]/div/div[2]/div/div[2]/dl/dd[7]/span|sum, Magic, Lorcana, StarWarsUnlimited, FinalFantasy, FoW, WoW, Dragoborne, MyLittlePony, Spoils
+Trend Price|/html/body/main/div[3]/section[2]/div/div[2]/div[1]/div/div[1]/div/div[2]/dl/dd[7]/span|sum, Pokemon, YuGiOh, OnePiece, Riftbound, FleshAndBlood, Digimon, DragonBallSuper, Vanguard, WeissSchwarz, BattleSpiritsSaga, StarWarsDestiny
+
+Avg 30d Price|/html/body/main/div[3]/section[2]/div/div[2]/div[1]/div/div[2]/div/div[2]/dl/dd[8]/span|Magic, Lorcana, StarWarsUnlimited, FinalFantasy, FoW, WoW, Dragoborne, MyLittlePony, Spoils
+Avg 30d Price|/html/body/main/div[3]/section[2]/div/div[2]/div[1]/div/div[1]/div/div[2]/dl/dd[8]/span|Pokemon, YuGiOh, OnePiece, Riftbound, FleshAndBlood, Digimon, DragonBallSuper, Vanguard, WeissSchwarz, BattleSpiritsSaga, StarWarsDestiny
+Avg 7d Price|/html/body/main/div[3]/section[2]/div/div[2]/div[1]/div/div[2]/div/div[2]/dl/dd[9]/span|Magic, Lorcana, StarWarsUnlimited, FinalFantasy, FoW, WoW, Dragoborne, MyLittlePony, Spoils
+Avg 7d Price|/html/body/main/div[3]/section[2]/div/div[2]/div[1]/div/div[1]/div/div[2]/dl/dd[9]/span|Pokemon, YuGiOh, OnePiece, Riftbound, FleshAndBlood, Digimon, DragonBallSuper, Vanguard, WeissSchwarz, BattleSpiritsSaga, StarWarsDestiny
+Avg 1d Price|/html/body/main/div[3]/section[2]/div/div[2]/div[1]/div/div[2]/div/div[2]/dl/dd[10]/span|Magic, Lorcana, StarWarsUnlimited, FinalFantasy, FoW, WoW, Dragoborne, MyLittlePony, Spoils
+Avg 1d Price|/html/body/main/div[3]/section[2]/div/div[2]/div[1]/div/div[1]/div/div[2]/dl/dd[10]/span|Pokemon, YuGiOh, OnePiece, Riftbound, FleshAndBlood, Digimon, DragonBallSuper, Vanguard, WeissSchwarz, BattleSpiritsSaga, StarWarsDestiny
+
+First Price in filter|/html/body/main/div[3]/section[5]/div/div[2]/div[1]/div[3]/div[1]/div/div/span|sum, any
+`;
+
+    const TCG_LIST = [
+      'Pokemon', 'Magic', 'YuGiOh', 'OnePiece', 'Lorcana', 'Riftbound',
+      'FleshAndBlood', 'StarWarsUnlimited', 'Digimon', 'DragonBallSuper',
+      'Vanguard', 'WeissSchwarz', 'FinalFantasy', 'FoW', 'BattleSpiritsSaga',
+      'WoW', 'StarWarsDestiny', 'Dragoborne', 'MyLittlePony', 'Spoils'
+    ];
+
+    let isRunning = false;
+    let logsStarted = false;
+    let resultsStarted = false;
+    let sumConfig = [];
+    let runningTotals = {};
+
+    const el = {
+      urls: document.getElementById('urls'),
+      tcgSelect: document.getElementById('tcgSelect'),
+      outputDir: document.getElementById('outputDir'),
+      username: document.getElementById('username'),
+      password: document.getElementById('password'),
+      minDelay: document.getElementById('minDelay'),
+      maxDelay: document.getElementById('maxDelay'),
+      cfWait: document.getElementById('cfWait'),
+      retries: document.getElementById('retries'),
+      showChrome: document.getElementById('showChrome'),
+      startBtn: document.getElementById('startBtn'),
+      stopBtn: document.getElementById('stopBtn'),
+      loadUrlsBtn: document.getElementById('loadUrlsBtn'),
+      selectOutputBtn: document.getElementById('selectOutputBtn'),
+      logContainer: document.getElementById('logContainer'),
+      resultsContainer: document.getElementById('resultsContainer'),
+      statusDot: document.getElementById('statusDot'),
+      statusText: document.getElementById('statusText'),
+      progressBar: document.getElementById('progressBar'),
+      progressFill: document.getElementById('progressFill'),
+      sumBanner: document.getElementById('sumBanner'),
+    };
+
+    // Filter xpaths for a specific TCG (when not in auto mode)
+    function processConfigForTcg(rawConfig, selectedTcg) {
+      const lines = [];
+      const sumKeys = [];
+      const tcgLower = selectedTcg.toLowerCase();
+
+      rawConfig.split('\n').forEach(line => {
+        const parts = line.split('|').map(s => s.trim());
+        if (parts.length < 2) return;
+
+        const title = parts[0];
+        const xpath = parts[1];
+        const tags = (parts[2] || '').split(',').map(t => t.trim().toLowerCase()).filter(Boolean);
+        const isSum = tags.includes('sum');
+        const lineTcgs = TCG_LIST.filter(tcg => tags.includes(tcg.toLowerCase()));
+
+        // include if: no TCG tags (universal), or matches our TCG
+        let include = false;
+        if (lineTcgs.length === 0 && !tags.includes('any')) include = true;
+        else if (lineTcgs.some(t => t.toLowerCase() === tcgLower)) include = true;
+
+        if (include) {
+          lines.push(`${title}|${xpath}`);
+          if (isSum && !sumKeys.includes(title)) sumKeys.push(title);
+        }
+      });
+
+      return { backendContent: lines.join('\n'), sumKeys };
+    }
+
+    // Get all sum keys from config (for auto mode)
+    function getAllSumKeys(rawConfig) {
+      const keys = [];
+      rawConfig.split('\n').forEach(line => {
+        const parts = line.split('|').map(s => s.trim());
+        if (parts.length < 2) return;
+        const tags = (parts[2] || '').split(',').map(t => t.trim().toLowerCase()).filter(Boolean);
+        if (tags.includes('sum') && !keys.includes(parts[0])) keys.push(parts[0]);
+      });
+      return keys;
+    }
+
+    // Tab switching
+    document.querySelectorAll('.tab').forEach(tab => {
+      tab.addEventListener('click', () => {
+        document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+        document.querySelectorAll('.view').forEach(c => c.classList.remove('active'));
+        tab.classList.add('active');
+        document.getElementById(`${tab.dataset.tab}-tab`).classList.add('active');
+      });
+    });
+
+    el.loadUrlsBtn.addEventListener('click', async () => {
+      const result = await window.api.loadFile('urls');
+      if (result) el.urls.value = result.content;
+    });
+
+    el.selectOutputBtn.addEventListener('click', async () => {
+      const dir = await window.api.selectOutputDir();
+      if (dir) el.outputDir.value = dir;
+    });
+
+    function scrollToBottom(container) {
+      setTimeout(() => { container.scrollTop = container.scrollHeight; }, 50);
+    }
+
+    function addLog(msg, timestamp) {
+      if (!logsStarted) {
+        el.logContainer.innerHTML = '';
+        logsStarted = true;
+      }
+      const entry = document.createElement('div');
+      entry.className = 'log-line';
+      const time = timestamp ? new Date(timestamp).toLocaleTimeString() : new Date().toLocaleTimeString();
+      entry.innerHTML = `<div class="log-time">${time}</div><div class="log-msg">${escapeHtml(msg)}</div>`;
+      el.logContainer.appendChild(entry);
+      scrollToBottom(el.logContainer);
+    }
+
+    function parseEuroFloat(str) {
+      if (!str) return 0;
+      const clean = str.toString().replace(/[^\d,-]/g, '').replace(',', '.');
+      const val = parseFloat(clean);
+      return isNaN(val) ? 0 : val;
+    }
+
+    function updateSumBanner() {
+      if (!Object.keys(runningTotals).length) {
+        el.sumBanner.style.display = 'none';
+        return;
+      }
+      el.sumBanner.style.display = 'flex';
+      el.sumBanner.innerHTML = '';
+
+      for (const [key, val] of Object.entries(runningTotals)) {
+        const item = document.createElement('div');
+        item.className = 'sum-metric';
+        const formatted = new Intl.NumberFormat('de-DE', { style: 'currency', currency: 'EUR' }).format(val);
+        item.innerHTML = `<div class="val">${formatted}</div><div class="lbl">${escapeHtml(key)}</div>`;
+        el.sumBanner.appendChild(item);
+      }
+    }
+
+    function addResult(result) {
+      if (!resultsStarted) {
+        el.resultsContainer.innerHTML = '';
+        resultsStarted = true;
+      }
+
+      // update running totals
+      if (result.success && result.extractedData) {
+        let changed = false;
+        sumConfig.forEach(key => {
+          if (result.extractedData[key]) {
+            const num = parseEuroFloat(result.extractedData[key]);
+            runningTotals[key] = (runningTotals[key] || 0) + num;
+            changed = true;
+          }
+        });
+        if (changed) updateSumBanner();
+      }
+
+      const card = document.createElement('div');
+      card.className = 'result-card';
+
+      let statsHtml = '';
+      for (const [key, value] of Object.entries(result.extractedData || {})) {
+        statsHtml += `<div class="stat-item"><dt>${escapeHtml(key)}</dt><dd>${escapeHtml(value || '—')}</dd></div>`;
+      }
+
+      const badgeClass = result.success ? 'badge-success' : 'badge-error';
+      const badgeText = result.success ? 'Success' : 'Failed';
+      const tcgBadge = result.detectedTcg
+        ? `<span class="badge" style="background: rgba(99, 102, 241, 0.1); color: var(--primary); margin-left: 8px;">${escapeHtml(result.detectedTcg)}</span>`
+        : '';
+
+      card.innerHTML = `
+        <div class="result-header">
+          <div class="result-url" title="${escapeHtml(result.url)}">${escapeHtml(result.url)}</div>
+          <div><span class="badge ${badgeClass}">${badgeText}</span>${tcgBadge}</div>
+        </div>
+        ${result.error ? `<div style="color:var(--error); font-size:12px; margin-bottom:12px;">${escapeHtml(result.error)}</div>` : ''}
+        <div class="stat-grid">${statsHtml}</div>
+      `;
+
+      el.resultsContainer.appendChild(card);
+      scrollToBottom(el.resultsContainer);
+    }
+
+    function escapeHtml(text) {
+      const div = document.createElement('div');
+      div.textContent = text;
+      return div.innerHTML;
+    }
+
+    function setStatus(text, running = false, error = false) {
+      el.statusText.textContent = text;
+      el.statusDot.className = 'status-dot' + (running ? ' active' : '') + (error ? ' error' : '');
+    }
+
+    function setProgress(current, total) {
+      if (total > 0) {
+        el.progressBar.style.display = 'block';
+        el.progressFill.style.width = `${(current / total) * 100}%`;
+      } else {
+        el.progressBar.style.display = 'none';
+      }
+    }
+
+    // Main start handler
+    el.startBtn.addEventListener('click', async () => {
+      if (isRunning) return;
+
+      const urlsContent = el.urls.value.trim();
+      const selectedTcg = el.tcgSelect.value;
+
+      if (!urlsContent) {
+        alert('Please provide URLs.');
+        return;
+      }
+
+      isRunning = true;
+      logsStarted = false;
+      resultsStarted = false;
+      runningTotals = {};
+      el.sumBanner.style.display = 'none';
+
+      el.startBtn.disabled = true;
+      el.stopBtn.disabled = false;
+      setStatus(`Processing ${selectedTcg === 'Any' ? 'auto-detect' : selectedTcg}...`, true);
+      setProgress(0, 0);
+
+      let config;
+
+      if (selectedTcg === 'Any') {
+        // auto mode: send raw config, backend figures it out per URL
+        sumConfig = getAllSumKeys(RAW_XPATH_CONFIG);
+        config = {
+          urlsContent,
+          rawXpathConfig: RAW_XPATH_CONFIG,
+          tcgList: TCG_LIST,
+          autoDetectMode: true,
+          outputDir: el.outputDir.value || './scraped_results',
+          user: el.username.value || null,
+          pass: el.password.value || null,
+          minDelay: parseInt(el.minDelay.value) || 3000,
+          maxDelay: parseInt(el.maxDelay.value) || 8000,
+          cloudflareWaitTime: parseInt(el.cfWait.value) || 30000,
+          maxRetries: parseInt(el.retries.value) || 3,
+          showChrome: el.showChrome.checked,
+        };
+      } else {
+        // specific TCG: filter config upfront
+        const configObj = processConfigForTcg(RAW_XPATH_CONFIG, selectedTcg);
+        sumConfig = configObj.sumKeys;
+        config = {
+          urlsContent,
+          xpathsContent: configObj.backendContent,
+          autoDetectMode: false,
+          outputDir: el.outputDir.value || './scraped_results',
+          user: el.username.value || null,
+          pass: el.password.value || null,
+          minDelay: parseInt(el.minDelay.value) || 3000,
+          maxDelay: parseInt(el.maxDelay.value) || 8000,
+          cloudflareWaitTime: parseInt(el.cfWait.value) || 30000,
+          maxRetries: parseInt(el.retries.value) || 3,
+          showChrome: el.showChrome.checked,
+        };
+      }
+
+      window.api.onScraperEvent(({ type, data }) => {
+        switch (type) {
+          case 'log': addLog(data.message, data.timestamp); break;
+          case 'progress':
+            setStatus(`Processing ${data.current} of ${data.total}`, true);
+            setProgress(data.current, data.total);
+            break;
+          case 'result': addResult(data); break;
+          case 'completed':
+            setStatus(`Complete: ${data.successful} ok, ${data.failed} failed`);
+            break;
+        }
+      });
+
+      try {
+        const result = await window.api.startScrape(config);
+        if (!result.success) {
+          addLog(`Error: ${result.error}`);
+          setStatus('Failed', false, true);
+        }
+      } catch (err) {
+        addLog(`Error: ${err.message}`);
+        setStatus('Error', false, true);
+      } finally {
+        isRunning = false;
+        el.startBtn.disabled = false;
+        el.stopBtn.disabled = true;
+        window.api.removeScraperListeners();
+      }
+    });
+
+    el.stopBtn.addEventListener('click', async () => {
+      if (!isRunning) return;
+      setStatus('Stopping...');
+      await window.api.stopScrape();
+      setStatus('Stopped');
+    });
+  </script>
+</body>
+</html>
