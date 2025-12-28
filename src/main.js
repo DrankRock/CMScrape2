@@ -12,13 +12,14 @@ function createWindow() {
     height: 800,
     minWidth: 800,
     minHeight: 600,
+    icon: path.join(__dirname, "icon.ico"),
     webPreferences: {
       nodeIntegration: false,
       contextIsolation: true,
       preload: path.join(__dirname, "preload.js"),
     },
     backgroundColor: "#1a1a2e",
-    title: "CardMarket Scraper",
+    title: "CMScrape - Ulixe Hero version",
   });
 
   mainWindow.loadFile(path.join(__dirname, "index.html"));

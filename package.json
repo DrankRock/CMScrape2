@@ -21,5 +21,10 @@
     "dependencies": {
         "@ulixee/hero-playground": "^2.0.0-alpha.29",
         "jsdom": "^25.0.0"
+    }, 
+    "build": {
+        "win": {
+            "icon": "build/icon.ico"
+        }
     }
 }
