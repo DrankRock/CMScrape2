@@ -1,4 +1,4 @@
-const Hero = require("@ulixee/hero-playground").default;
+const Hero = require("@ulixee/hero").default;
 const { JSDOM } = require("jsdom");
 const fs = require("fs");
 const path = require("path");
@@ -246,36 +246,55 @@ class Scraper {
       await this.hero.goto("https://www.cardmarket.com/en/Magic", { timeoutMs: 60000 });
       await this.hero.waitForPaintingStable({ timeoutMs: 15000 }).catch(() => {});
 
-      const html = await this.hero.document.documentElement.outerHTML;
+      let html = await this.hero.document.documentElement.outerHTML;
       if (detectCloudflare(html).detected) {
-        this.log("CF on login page, waiting...");
+        this.log("CF detected on login page, waiting...");
         await sleep(15000);
+        html = await this.hero.document.documentElement.outerHTML;
+        if (detectCloudflare(html).detected) {
+          this.log("Still blocked on login, skipping login");
+          return false;
+        }
       }
 
-      const XPATH_TYPE = 9; // FIRST_ORDERED_NODE_TYPE
-
-      const userInput = await this.hero.document.evaluate(
-        CARDMARKET_LOGIN_XPATHS.username, this.hero.document, null, XPATH_TYPE, null
+      const usernameInput = await this.hero.document.evaluate(
+        CARDMARKET_LOGIN_XPATHS.username,
+        this.hero.document,
+        null,
+        0,
+        null
       );
-      if (!userInput.singleNodeValue) {
+      if (!usernameInput.singleNodeValue) {
         this.log("Can't find username field");
         return false;
       }
-      await this.hero.click(userInput.singleNodeValue);
-      await this.hero.type(user);
 
-      const passInput = await this.hero.document.evaluate(
-        CARDMARKET_LOGIN_XPATHS.password, this.hero.document, null, XPATH_TYPE, null
+      await this.hero.click(usernameInput.singleNodeValue);
+      await this.hero.type(user);
+      await sleep(500);
+
+      const passwordInput = await this.hero.document.evaluate(
+        CARDMARKET_LOGIN_XPATHS.password,
+        this.hero.document,
+        null,
+        0,
+        null
       );
-      if (!passInput.singleNodeValue) {
+      if (!passwordInput.singleNodeValue) {
         this.log("Can't find password field");
         return false;
       }
-      await this.hero.click(passInput.singleNodeValue);
+
+      await this.hero.click(passwordInput.singleNodeValue);
       await this.hero.type(pass);
+      await sleep(500);
 
       const submitBtn = await this.hero.document.evaluate(
-        CARDMARKET_LOGIN_XPATHS.submit, this.hero.document, null, XPATH_TYPE, null
+        CARDMARKET_LOGIN_XPATHS.submit,
+        this.hero.document,
+        null,
+        0,
+        null
       );
       if (!submitBtn.singleNodeValue) {
         this.log("Can't find submit button");

@@ -1,12 +1,28 @@
 const { app, BrowserWindow, ipcMain, dialog } = require("electron");
 const path = require("path");
 const fs = require("fs");
+const Cloud = require("@ulixee/cloud").default;
 const { Scraper } = require("./scraper");
 
 let mainWindow;
 let scraper = null;
+let cloud = null;
 
 const CONFIG_FILE = path.join(app.getPath('userData'), 'scraper-config.json');
+
+async function startCloud() {
+  if (cloud) return;
+  cloud = new Cloud();
+  await cloud.listen();
+  console.log(`Ulixee Cloud started at ${await cloud.address}`);
+}
+
+async function stopCloud() {
+  if (cloud) {
+    await cloud.close();
+    cloud = null;
+  }
+}
 
 function loadConfig() {
   try {
@@ -52,18 +68,21 @@ function createWindow() {
 
   mainWindow.loadFile(path.join(__dirname, "index.html"));
 
-  // Open DevTools in dev mode
   if (process.argv.includes("--dev")) {
     mainWindow.webContents.openDevTools();
   }
 }
 
-app.whenReady().then(createWindow);
+app.whenReady().then(async () => {
+  await startCloud();
+  createWindow();
+});
 
 app.on("window-all-closed", async () => {
   if (scraper) {
     await scraper.close();
   }
+  await stopCloud();
   if (process.platform !== "darwin") {
     app.quit();
   }

@@ -19,7 +19,8 @@
         "electron-rebuild": "^3.2.9"
     },
     "dependencies": {
-        "@ulixee/hero-playground": "^2.0.0-alpha.29",
+        "@ulixee/hero": "^2.0.0-alpha.29",
+        "@ulixee/cloud": "^2.0.0-alpha.29",
         "jsdom": "^25.0.0"
     }, 
     "build": {
