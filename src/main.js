@@ -6,6 +6,34 @@ const { Scraper } = require("./scraper");
 let mainWindow;
 let scraper = null;
 
+const CONFIG_FILE = path.join(app.getPath('userData'), 'scraper-config.json');
+
+function loadConfig() {
+  try {
+    if (fs.existsSync(CONFIG_FILE)) {
+      return JSON.parse(fs.readFileSync(CONFIG_FILE, 'utf-8'));
+    }
+  } catch (error) {
+    console.error('Error loading config:', error);
+  }
+  return {
+    delay: 1000,
+    headless: true,
+    timeout: 30000,
+    maxRetries: 3,
+    userAgent: ''
+  };
+}
+
+function saveConfig(config) {
+  try {
+    fs.writeFileSync(CONFIG_FILE, JSON.stringify(config, null, 2));
+    return { success: true };
+  } catch (error) {
+    return { success: false, error: error.message };
+  }
+}
+
 function createWindow() {
   mainWindow = new BrowserWindow({
     width: 1200,
@@ -94,4 +122,12 @@ ipcMain.handle("stop-scrape", async () => {
     scraper = null;
   }
   return { success: true };
+});
+
+ipcMain.handle("load-config", async () => {
+  return loadConfig();
+});
+
+ipcMain.handle("save-config", async (event, config) => {
+  return saveConfig(config);
 });
