@@ -1,9 +1,7 @@
 # CMScrape 2
 
-## WARNING
-**THIS PROJECT ISN'T FULLY COOKED YET, MISSING ONE OR TWO COMMITS AND A RELEASE**
+<img width="1194" height="712" alt="{8AC7844B-2A48-4D7F-949E-BCF9508EE22D}" src="https://github.com/user-attachments/assets/b4c1ed22-9ba3-4744-af5c-647844731be7" />
 
-Scrapes card prices from CardMarket. Handles Cloudflare, exports to CSV.
 
 ## Usage
 0. Get latest release, install it
