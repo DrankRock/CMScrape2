@@ -142,6 +142,7 @@
     .btn:disabled { opacity: 0.5; cursor: not-allowed; }
 
     .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+    .grid-3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 8px; }
 
     .checkbox-wrap { display: flex; align-items: center; gap: 8px; cursor: pointer; user-select: none; }
     .checkbox-wrap input { width: auto; accent-color: var(--primary); }
@@ -261,6 +262,41 @@
       height: 100%; display: flex; align-items: center; justify-content: center;
       color: var(--text-dim); font-size: 12px; letter-spacing: 0.05em; text-transform: uppercase;
     }
+    
+    .section-label {
+      font-size: 10px;
+      color: var(--text-dim);
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      margin-bottom: 8px;
+      padding-bottom: 4px;
+      border-bottom: 1px solid var(--border-subtle);
+    }
+    
+    .tooltip {
+      position: relative;
+      cursor: help;
+    }
+    .tooltip::after {
+      content: attr(data-tip);
+      position: absolute;
+      bottom: 100%;
+      left: 50%;
+      transform: translateX(-50%);
+      background: var(--bg-surface);
+      color: var(--text-main);
+      padding: 4px 8px;
+      border-radius: 4px;
+      font-size: 10px;
+      white-space: nowrap;
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity 0.2s;
+      z-index: 100;
+    }
+    .tooltip:hover::after {
+      opacity: 1;
+    }
   </style>
 </head>
 <body>
@@ -270,7 +306,7 @@
       <div class="brand-icon"></div>
       <span>Extraction Engine</span>
     </div>
-    <div style="font-size: 11px; color: var(--text-dim);">v2.5.0</div>
+    <div style="font-size: 11px; color: var(--text-dim);">v2.6.0 - Anti-CF</div>
   </header>
 
   <main>
@@ -311,30 +347,41 @@
 
         <div class="grid-2">
            <div>
-             <span class="label" style="font-size:9px;">Min Delay</span>
+             <span class="label" style="font-size:9px;">Min Delay (ms)</span>
              <input type="number" id="minDelay" value="3000">
            </div>
            <div>
-             <span class="label" style="font-size:9px;">Max Delay</span>
+             <span class="label" style="font-size:9px;">Max Delay (ms)</span>
              <input type="number" id="maxDelay" value="8000">
            </div>
         </div>
       </div>
 
       <div class="config-section">
-        <div class="grid-2">
+        <div class="section-label">Anti-Detection</div>
+        <div class="grid-3">
            <div>
-             <span class="label" style="font-size:9px;">CF Wait</span>
+             <span class="label tooltip" style="font-size:9px;" data-tip="Wait time after CF block">CF Wait</span>
              <input type="number" id="cfWait" value="30000">
            </div>
            <div>
-             <span class="label" style="font-size:9px;">Retries</span>
+             <span class="label tooltip" style="font-size:9px;" data-tip="Max retry attempts">Retries</span>
              <input type="number" id="retries" value="3">
            </div>
+           <div>
+             <span class="label tooltip" style="font-size:9px;" data-tip="URLs before rotating UA">Per Session</span>
+             <input type="number" id="urlsPerSession" value="15">
+           </div>
         </div>
-        <label class="checkbox-wrap">
+        <div class="grid-2" style="margin-top: 8px;">
+           <div>
+             <span class="label tooltip" style="font-size:9px;" data-tip="Cooldown after hard captcha (ms)">Hard CF Wait</span>
+             <input type="number" id="hardCfWait" value="45000">
+           </div>
+        </div>
+        <label class="checkbox-wrap" style="margin-top: 8px;">
           <input type="checkbox" id="showChrome" checked>
-          <span style="font-size: 11px; color: var(--text-muted);">Headless Mode Off</span>
+          <span style="font-size: 11px; color: var(--text-muted);">Show Browser (recommended)</span>
         </label>
       </div>
 
@@ -389,8 +436,9 @@
   </footer>
 
   <script>
-    // XPath config. Format: Title|xpath|tags (comma separated)
-    // Tags can be: tcg names, "any" for fallback, "sum" for totaling
+    // xpath config - format: Title|xpath|tags
+    // tags = tcg names, "any" for fallback, "sum" for totaling
+    // these break when cardmarket changes their layout
     const RAW_XPATH_CONFIG = `
 Card Title|/html/body/main/div[2]/div[1]/h1/text()
 
@@ -425,8 +473,8 @@ First Price in filter|/html/body/main/div[3]/section[5]/div/div[2]/div[1]/div[3]
       'WoW', 'StarWarsDestiny', 'Dragoborne', 'MyLittlePony', 'Spoils'
     ];
 
-
-        const el = {
+    // dom refs
+    const el = {
       urls: document.getElementById('urls'),
       tcgSelect: document.getElementById('tcgSelect'),
       outputDir: document.getElementById('outputDir'),
@@ -436,6 +484,8 @@ First Price in filter|/html/body/main/div[3]/section[5]/div/div[2]/div[1]/div[3]
       maxDelay: document.getElementById('maxDelay'),
       cfWait: document.getElementById('cfWait'),
       retries: document.getElementById('retries'),
+      urlsPerSession: document.getElementById('urlsPerSession'),
+      hardCfWait: document.getElementById('hardCfWait'),
       showChrome: document.getElementById('showChrome'),
       startBtn: document.getElementById('startBtn'),
       stopBtn: document.getElementById('stopBtn'),
@@ -449,57 +499,6 @@ First Price in filter|/html/body/main/div[3]/section[5]/div/div[2]/div[1]/div[3]
       progressFill: document.getElementById('progressFill'),
       sumBanner: document.getElementById('sumBanner'),
     };
-    
-    // Load saved config on startup
-    let savedConfig = {};
-
-    // ============ CONFIG PERSISTENCE ============
-    async function loadSavedConfig() {
-      const config = await window.api.loadConfig();
-      
-      el.minDelay.value = config.minDelay || 3000;
-      el.maxDelay.value = config.maxDelay || 8000;
-      el.cfWait.value = config.cloudflareWaitTime || 30000;
-      el.retries.value = config.maxRetries || 3;
-      el.showChrome.checked = config.showChrome || false;
-      el.username.value = config.user || '';
-      el.password.value = config.pass || '';
-      el.outputDir.value = config.outputDir || './scraped_results';
-      el.tcgSelect.value = config.tcg || 'Any';
-    }
-
-    function saveCurrentConfig() {
-      const config = {
-        minDelay: parseInt(el.minDelay.value),
-        maxDelay: parseInt(el.maxDelay.value),
-        cloudflareWaitTime: parseInt(el.cfWait.value),
-        maxRetries: parseInt(el.retries.value),
-        showChrome: el.showChrome.checked,
-        user: el.username.value,
-        pass: el.password.value,
-        outputDir: el.outputDir.value,
-        tcg: el.tcgSelect.value
-      };
-      window.api.saveConfig(config);
-    }
-
-    // Save on ANY change
-    el.minDelay.addEventListener('input', saveCurrentConfig);
-    el.maxDelay.addEventListener('input', saveCurrentConfig);
-    el.cfWait.addEventListener('input', saveCurrentConfig);
-    el.retries.addEventListener('input', saveCurrentConfig);
-    el.showChrome.addEventListener('change', saveCurrentConfig);
-    el.username.addEventListener('input', saveCurrentConfig);
-    el.password.addEventListener('input', saveCurrentConfig);
-    el.outputDir.addEventListener('input', saveCurrentConfig);
-    el.tcgSelect.addEventListener('change', saveCurrentConfig);
-
-    // Load on startup
-    loadSavedConfig();
-    // ============================================
-
-    // Load config when page loads
-    window.addEventListener('DOMContentLoaded', loadSavedConfig);
 
     let isRunning = false;
     let logsStarted = false;
@@ -507,51 +506,51 @@ First Price in filter|/html/body/main/div[3]/section[5]/div/div[2]/div[1]/div[3]
     let sumConfig = [];
     let runningTotals = {};
 
-
-
-    // Filter xpaths for a specific TCG (when not in auto mode)
+    // parse xpath config for a specific TCG
     function processConfigForTcg(rawConfig, selectedTcg) {
-      const lines = [];
+      const lines = rawConfig.trim().split('\n').filter(l => l.trim() && !l.startsWith('#'));
+      const byTitle = {};
       const sumKeys = [];
-      const tcgLower = selectedTcg.toLowerCase();
 
-      rawConfig.split('\n').forEach(line => {
+      for (const line of lines) {
         const parts = line.split('|').map(s => s.trim());
-        if (parts.length < 2) return;
+        if (parts.length < 2) continue;
 
-        const title = parts[0];
-        const xpath = parts[1];
-        const tags = (parts[2] || '').split(',').map(t => t.trim().toLowerCase()).filter(Boolean);
-        const isSum = tags.includes('sum');
-        const lineTcgs = TCG_LIST.filter(tcg => tags.includes(tcg.toLowerCase()));
+        const [title, xpath] = parts;
+        const tagsRaw = parts[2] || '';
+        const tags = tagsRaw.split(',').map(t => t.trim().toLowerCase()).filter(Boolean);
 
-        // include if: no TCG tags (universal), or matches our TCG
-        let include = false;
-        if (lineTcgs.length === 0 && !tags.includes('any')) include = true;
-        else if (lineTcgs.some(t => t.toLowerCase() === tcgLower)) include = true;
+        const tcgMatch = tags.includes(selectedTcg.toLowerCase());
+        const isAny = tags.includes('any');
+        const isUniversal = tags.filter(t => !['sum', 'any'].includes(t)).length === 0;
 
-        if (include) {
-          lines.push(`${title}|${xpath}`);
-          if (isSum && !sumKeys.includes(title)) sumKeys.push(title);
+        (byTitle[title] ||= []).push({ xpath, tcgMatch, isAny, isUniversal, isSum: tags.includes('sum') });
+      }
+
+      const result = [];
+      for (const [title, entries] of Object.entries(byTitle)) {
+        let pick = entries.find(e => e.tcgMatch) || entries.find(e => e.isAny) || entries.find(e => e.isUniversal);
+        if (pick) {
+          result.push(`${title}|${pick.xpath}`);
+          if (pick.isSum) sumKeys.push(title);
         }
-      });
+      }
 
-      return { backendContent: lines.join('\n'), sumKeys };
+      return { backendContent: result.join('\n'), sumKeys };
     }
 
-    // Get all sum keys from config (for auto mode)
     function getAllSumKeys(rawConfig) {
       const keys = [];
-      rawConfig.split('\n').forEach(line => {
-        const parts = line.split('|').map(s => s.trim());
-        if (parts.length < 2) return;
-        const tags = (parts[2] || '').split(',').map(t => t.trim().toLowerCase()).filter(Boolean);
+      rawConfig.trim().split('\n').forEach(line => {
+        const parts = line.split('|');
+        if (parts.length < 3) return;
+        const tags = parts[2].toLowerCase();
         if (tags.includes('sum') && !keys.includes(parts[0])) keys.push(parts[0]);
       });
       return keys;
     }
 
-    // Tab switching
+    // tab switching
     document.querySelectorAll('.tab').forEach(tab => {
       tab.addEventListener('click', () => {
         document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
@@ -678,7 +677,7 @@ First Price in filter|/html/body/main/div[3]/section[5]/div/div[2]/div[1]/div[3]
       }
     }
 
-    // Main start handler
+    // main start handler
     el.startBtn.addEventListener('click', async () => {
       if (isRunning) return;
 
@@ -704,7 +703,7 @@ First Price in filter|/html/body/main/div[3]/section[5]/div/div[2]/div[1]/div[3]
       let config;
 
       if (selectedTcg === 'Any') {
-        // auto mode: send raw config, backend figures it out per URL
+        // auto mode: send raw config, backend figures it out
         sumConfig = getAllSumKeys(RAW_XPATH_CONFIG);
         config = {
           urlsContent,
@@ -718,10 +717,12 @@ First Price in filter|/html/body/main/div[3]/section[5]/div/div[2]/div[1]/div[3]
           maxDelay: parseInt(el.maxDelay.value) || 8000,
           cloudflareWaitTime: parseInt(el.cfWait.value) || 30000,
           maxRetries: parseInt(el.retries.value) || 3,
+          urlsPerSession: parseInt(el.urlsPerSession.value) || 15,
+          hardChallengeCooldown: parseInt(el.hardCfWait.value) || 45000,
           showChrome: el.showChrome.checked,
         };
       } else {
-        // specific TCG: filter config upfront
+        // specific tcg: filter config upfront
         const configObj = processConfigForTcg(RAW_XPATH_CONFIG, selectedTcg);
         sumConfig = configObj.sumKeys;
         config = {
@@ -735,6 +736,8 @@ First Price in filter|/html/body/main/div[3]/section[5]/div/div[2]/div[1]/div[3]
           maxDelay: parseInt(el.maxDelay.value) || 8000,
           cloudflareWaitTime: parseInt(el.cfWait.value) || 30000,
           maxRetries: parseInt(el.retries.value) || 3,
+          urlsPerSession: parseInt(el.urlsPerSession.value) || 15,
+          hardChallengeCooldown: parseInt(el.hardCfWait.value) || 45000,
           showChrome: el.showChrome.checked,
         };
       }
