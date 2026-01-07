@@ -383,6 +383,21 @@
           <input type="checkbox" id="showChrome" checked>
           <span style="font-size: 11px; color: var(--text-muted);">Show Browser (recommended)</span>
         </label>
+        <label class="checkbox-wrap" style="margin-top: 4px;">
+          <input type="checkbox" id="enableWarmup" checked>
+          <span style="font-size: 11px; color: var(--text-muted);">Session Warmup (visit homepage first)</span>
+        </label>
+        <div style="margin-top: 8px; padding: 8px; background: rgba(0,255,0,0.05); border-radius: 4px; border: 1px solid rgba(0,255,0,0.2);">
+          <div style="font-size: 9px; color: var(--text-muted); margin-bottom: 4px;">✓ Active Protections:</div>
+          <div style="font-size: 9px; color: var(--text-dim); line-height: 1.4;">
+            • Viewport randomization (1920-2080×1080-1240)<br>
+            • Locale/Timezone rotation (12 variants)<br>
+            • TLS fingerprint matching<br>
+            • Micro-jitter mouse movements<br>
+            • Enhanced human behavior simulation<br>
+            • Element hover interactions
+          </div>
+        </div>
       </div>
 
       <div class="config-section">
@@ -487,6 +502,7 @@ First Price in filter|/html/body/main/div[3]/section[5]/div/div[2]/div[1]/div[3]
       urlsPerSession: document.getElementById('urlsPerSession'),
       hardCfWait: document.getElementById('hardCfWait'),
       showChrome: document.getElementById('showChrome'),
+      enableWarmup: document.getElementById('enableWarmup'),
       startBtn: document.getElementById('startBtn'),
       stopBtn: document.getElementById('stopBtn'),
       loadUrlsBtn: document.getElementById('loadUrlsBtn'),
@@ -720,6 +736,7 @@ First Price in filter|/html/body/main/div[3]/section[5]/div/div[2]/div[1]/div[3]
           urlsPerSession: parseInt(el.urlsPerSession.value) || 15,
           hardChallengeCooldown: parseInt(el.hardCfWait.value) || 45000,
           showChrome: el.showChrome.checked,
+          enableWarmup: el.enableWarmup.checked,
         };
       } else {
         // specific tcg: filter config upfront
@@ -739,6 +756,7 @@ First Price in filter|/html/body/main/div[3]/section[5]/div/div[2]/div[1]/div[3]
           urlsPerSession: parseInt(el.urlsPerSession.value) || 15,
           hardChallengeCooldown: parseInt(el.hardCfWait.value) || 45000,
           showChrome: el.showChrome.checked,
+          enableWarmup: el.enableWarmup.checked,
         };
       }
 

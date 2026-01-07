@@ -174,6 +174,63 @@ function extractTcgFromUrl(url, tcgList) {
   }
 }
 
+function getRandomLocale() {
+  const locales = [
+    'en-US', 'en-GB', 'en-CA', 'en-AU',
+    'de-DE', 'fr-FR', 'es-ES', 'it-IT',
+    'nl-NL', 'pl-PL', 'pt-PT', 'pt-BR'
+  ];
+  return locales[Math.floor(Math.random() * locales.length)];
+}
+
+function getTimezoneForLocale(locale) {
+  const timezones = {
+    'en-US': ['America/New_York', 'America/Chicago', 'America/Los_Angeles', 'America/Denver'],
+    'en-GB': ['Europe/London'],
+    'de-DE': ['Europe/Berlin'],
+    'fr-FR': ['Europe/Paris'],
+    'es-ES': ['Europe/Madrid'],
+    'it-IT': ['Europe/Rome'],
+    'nl-NL': ['Europe/Amsterdam'],
+    'pl-PL': ['Europe/Warsaw'],
+    'pt-PT': ['Europe/Lisbon'],
+    'pt-BR': ['America/Sao_Paulo'],
+    'en-CA': ['America/Toronto'],
+    'en-AU': ['Australia/Sydney'],
+  };
+
+  const tzList = timezones[locale] || timezones['en-US'];
+  return tzList[Math.floor(Math.random() * tzList.length)];
+}
+
+function parseBrowserFromUA(ua) {
+  const chromeMatch = ua.match(/Chrome\/(\d+)/);
+  const firefoxMatch = ua.match(/Firefox\/(\d+)/);
+  const safariMatch = ua.match(/Safari\/(\d+)/);
+
+  if (chromeMatch) return { name: 'chrome', majorVersion: chromeMatch[1] };
+  if (firefoxMatch) return { name: 'firefox', majorVersion: firefoxMatch[1] };
+  if (safariMatch) return { name: 'safari', majorVersion: safariMatch[1] };
+
+  return { name: 'chrome', majorVersion: '120' };
+}
+
+function getSecChUa(ua) {
+  const chromeMatch = ua.match(/Chrome\/(\d+)/);
+  if (chromeMatch) {
+    const version = chromeMatch[1];
+    return `"Chromium";v="${version}", "Google Chrome";v="${version}", "Not=A?Brand";v="24"`;
+  }
+  return '"Not_A Brand";v="8", "Chromium";v="120"';
+}
+
+function getOSFromUA(ua) {
+  if (ua.includes('Windows')) return '"Windows"';
+  if (ua.includes('Macintosh')) return '"macOS"';
+  if (ua.includes('Linux')) return '"Linux"';
+  return '"Unknown"';
+}
+
 function parseRawXPathConfig(rawConfig, tcgList) {
   const tcgListLower = tcgList.map(t => t.toLowerCase());
   const entries = [];
@@ -244,6 +301,7 @@ class Scraper {
       autoDetectMode: config.autoDetectMode || false,
       urlsPerSession: config.urlsPerSession || 15,
       hardChallengeCooldown: config.hardChallengeCooldown || 45000,
+      enableWarmup: config.enableWarmup !== false, // Default to true
     };
 
     this.urls = parseUrls(config.urlsContent || "");
@@ -269,16 +327,16 @@ class Scraper {
     this.emit("log", { timestamp: new Date().toISOString(), message: msg });
   }
 
-  // Bezier curve mouse movement
+  // Bezier curve mouse movement with micro-jitter and variable speed
   async humanMove(hero, startX, startY, endX, endY) {
     const steps = 8 + Math.floor(Math.random() * 8);
     const points = [];
-    
+
     const cp1x = startX + (endX - startX) * 0.3 + (Math.random() - 0.5) * 100;
     const cp1y = startY + (endY - startY) * 0.3 + (Math.random() - 0.5) * 100;
     const cp2x = startX + (endX - startX) * 0.7 + (Math.random() - 0.5) * 100;
     const cp2y = startY + (endY - startY) * 0.7 + (Math.random() - 0.5) * 100;
-    
+
     for (let i = 0; i <= steps; i++) {
       const t = i / steps;
       const mt = 1 - t;
@@ -286,42 +344,108 @@ class Scraper {
       const y = mt*mt*mt*startY + 3*mt*mt*t*cp1y + 3*mt*t*t*cp2y + t*t*t*endY;
       points.push({ x: Math.round(x), y: Math.round(y) });
     }
-    
-    for (const point of points) {
-      await hero.interact({ move: [point.x, point.y] });
-      await sleep(20 + Math.random() * 40);
+
+    for (let i = 0; i < points.length; i++) {
+      const point = points[i];
+
+      // Add micro-jitter to movements (±1-2px)
+      const jitterX = point.x + (Math.random() - 0.5) * 2;
+      const jitterY = point.y + (Math.random() - 0.5) * 2;
+
+      await hero.interact({ move: [jitterX, jitterY] });
+
+      // Variable speed (faster in middle, slower at start/end)
+      const progress = i / points.length;
+      const speedMultiplier = Math.sin(progress * Math.PI); // 0 -> 1 -> 0
+      const baseDelay = 30 + Math.random() * 40;
+      const delay = baseDelay * (1 / (speedMultiplier + 0.5));
+
+      await sleep(Math.min(delay, 100)); // Cap at 100ms
     }
+
+    // Small pause at end (like human stopping cursor)
+    await sleep(50 + Math.random() * 150);
   }
 
   async simulateHumanBehavior(hero, maxTime = 2000) {
     if (!hero) return;
-    
+
     const startTime = Date.now();
     const timeLeft = () => maxTime - (Date.now() - startTime);
-    
+
     try {
-      const width = 1200;
-      const height = 800;
-      
-      let currentX = 100 + Math.random() * (width - 200);
-      let currentY = 100 + Math.random() * (height - 200);
-      
-      // One or two quick movements
-      const movements = 1 + Math.floor(Math.random() * 2);
-      for (let i = 0; i < movements && timeLeft() > 500; i++) {
-        const targetX = 50 + Math.random() * (width - 100);
-        const targetY = 50 + Math.random() * (height - 100);
-        await this.humanMove(hero, currentX, currentY, targetX, targetY);
-        currentX = targetX;
-        currentY = targetY;
+      // Get actual viewport dimensions from Hero
+      const viewport = await hero.activeTab.viewport;
+      const width = viewport.width;
+      const height = viewport.height;
+
+      // Center position for natural starting point
+      const centerX = width / 2;
+      const centerY = height / 2;
+
+      let currentX = centerX + (Math.random() - 0.5) * width * 0.6;
+      let currentY = centerY + (Math.random() - 0.5) * height * 0.6;
+
+      // More varied action count (2-4 actions)
+      const actions = Math.floor(Math.random() * 3) + 2;
+
+      for (let i = 0; i < actions && timeLeft() > 300; i++) {
+        const action = Math.random();
+
+        if (action < 0.4 && timeLeft() > 500) {
+          // Random mouse movements (more natural pattern)
+          const targetX = centerX + (Math.random() - 0.5) * width * 0.6;
+          const targetY = centerY + (Math.random() - 0.5) * height * 0.6;
+
+          await this.humanMove(hero, currentX, currentY, targetX, targetY);
+          currentX = targetX;
+          currentY = targetY;
+
+        } else if (action < 0.7 && timeLeft() > 400) {
+          // Variable scrolling patterns
+          const scrollType = Math.random();
+          if (scrollType < 0.5) {
+            // Small scroll
+            await hero.interact({ scroll: { y: 50 + Math.random() * 150 } });
+          } else {
+            // Read pattern: scroll down, pause, scroll back up a bit
+            await hero.interact({ scroll: { y: 200 + Math.random() * 200 } });
+            await sleep(Math.min(500 + Math.random() * 1000, timeLeft() * 0.3));
+            await hero.interact({ scroll: { y: -(50 + Math.random() * 100) } });
+          }
+
+        } else if (timeLeft() > 800) {
+          // Mouse hover over random element (looks like reading)
+          try {
+            const elements = await hero.document.querySelectorAll('a, button, div, p, h1, h2, h3');
+            if (elements.length > 0) {
+              const randomEl = elements[Math.floor(Math.random() * Math.min(elements.length, 20))];
+              const rect = await randomEl.getBoundingClientRect();
+
+              if (rect.width > 0 && rect.height > 0 && rect.top >= 0 && rect.left >= 0) {
+                const hoverX = rect.left + rect.width / 2;
+                const hoverY = rect.top + rect.height / 2;
+
+                // Only hover if element is in viewport
+                if (hoverX > 0 && hoverX < width && hoverY > 0 && hoverY < height) {
+                  await this.humanMove(hero, currentX, currentY, hoverX, hoverY);
+                  currentX = hoverX;
+                  currentY = hoverY;
+                  await sleep(Math.min(200 + Math.random() * 600, timeLeft() * 0.3)); // Hover duration
+                }
+              }
+            }
+          } catch (e) {
+            // Skip if element interaction fails
+          }
+        }
+
+        // Pause between actions
+        if (i < actions - 1 && timeLeft() > 300) {
+          await sleep(Math.min(300 + Math.random() * 700, timeLeft() * 0.2));
+        }
       }
-      
-      if (timeLeft() > 300) {
-        const scrollAmount = 50 + Math.floor(Math.random() * 200);
-        await hero.interact({ scroll: { y: scrollAmount } });
-        await sleep(Math.min(100, timeLeft()));
-      }
-      
+
     } catch (err) {
       // don't care
     }
@@ -406,15 +530,80 @@ class Scraper {
 
   async createHero() {
     this.currentUserAgent = getRandomUserAgent();
+    this.currentLocale = getRandomLocale();
+    this.currentTimezone = getTimezoneForLocale(this.currentLocale);
     this.urlsInCurrentSession = 0;
-    
+
+    // Viewport randomization - critical for fingerprinting
+    const viewportWidth = 1920 + Math.floor(Math.random() * 3) * 80;  // 1920, 2000, 2080
+    const viewportHeight = 1080 + Math.floor(Math.random() * 3) * 80; // 1080, 1160, 1240
+
+    // Parse browser info for explicit TLS configuration
+    const browserInfo = parseBrowserFromUA(this.currentUserAgent);
+    const tlsClientHelloId = `${browserInfo.name}-${browserInfo.majorVersion}`;
+
     this.log(`New session (showChrome: ${this.config.showChrome})`);
     this.log(`UA: ${this.currentUserAgent.substring(0, 60)}...`);
-    
-    this.hero = new Hero({ 
+    this.log(`Locale: ${this.currentLocale}, Timezone: ${this.currentTimezone}`);
+    this.log(`Viewport: ${viewportWidth}x${viewportHeight}`);
+    this.log(`TLS: ${tlsClientHelloId}`);
+
+    this.hero = new Hero({
       showChrome: this.config.showChrome,
       userAgent: this.currentUserAgent,
+
+      // Viewport randomization for realistic fingerprinting
+      viewport: {
+        width: viewportWidth,
+        height: viewportHeight,
+        deviceScaleFactor: 1,
+        positionX: 0,
+        positionY: 0,
+      },
+
+      // Locale & timezone for realistic fingerprinting
+      locale: this.currentLocale,
+      timezoneId: this.currentTimezone,
+
+      // Explicit TLS fingerprint matching (Hero does this automatically, but being explicit ensures correctness)
+      // This ensures TLS ClientHello matches the browser version in the User-Agent
+      connectionToCore: {
+        options: {
+          tlsClientHelloId: tlsClientHelloId,
+        },
+      },
+
+      // Human-like uptime (don't look like a fresh boot)
+      uptime: Math.floor(Math.random() * 100000) + 10000,
     });
+  }
+
+  async warmupSession() {
+    if (!this.hero || !this.config.enableWarmup) return;
+
+    this.log("Warming up session with legitimate browsing...");
+
+    const warmupUrls = [
+      'https://www.cardmarket.com',
+      'https://www.cardmarket.com/en/Magic',
+    ];
+
+    for (const url of warmupUrls) {
+      try {
+        await this.hero.goto(url, { timeoutMs: 15000 });
+        await this.hero.waitForPaintingStable({ timeoutMs: 10000 }).catch(() => {});
+
+        // Short human behavior simulation during warmup
+        await sleep(1000 + Math.random() * 2000);
+        await this.simulateHumanBehavior(this.hero, 1500);
+
+      } catch (e) {
+        // Ignore warmup failures - not critical
+        this.log(`Warmup failed for ${url}, continuing...`);
+      }
+    }
+
+    this.log("Session warmup complete");
   }
 
   async rotateSession() {
@@ -422,7 +611,10 @@ class Scraper {
     await this.close();
     await sleep(2000 + Math.random() * 3000);
     await this.createHero();
-    
+
+    // Warmup the new session
+    await this.warmupSession();
+
     if (this.config.user && this.config.pass) {
       const ok = await this.loginToCardmarket();
       if (!ok) this.log("Re-login failed after rotation");
@@ -613,10 +805,22 @@ class Scraper {
       this.log(`Loading ${url}`);
       this.emit("status", { url, status: "loading" });
 
+      // Hero automatically sets realistic headers based on userAgent, locale, and browser emulation:
+      // - Accept, Accept-Encoding, Accept-Language (from locale)
+      // - Sec-Ch-Ua headers (from browser version)
+      // - Sec-Fetch-* headers, Upgrade-Insecure-Requests, etc.
+      // - This ensures TLS fingerprint + headers match perfectly
       await this.hero.goto(url, { timeoutMs: this.config.pageLoadTimeout });
       await this.hero.waitForPaintingStable({ timeoutMs: 15000 }).catch(() => {});
 
-      let html = await this.hero.document.documentElement.outerHTML;
+      const documentElement = await this.hero.document.documentElement;
+      if (!documentElement) {
+        throw new Error('Page failed to load - document is empty');
+      }
+      let html = await documentElement.outerHTML;
+      if (!html || html.length < 100) {
+        throw new Error(`Page loaded but content is empty or too short (${html?.length || 0} chars)`);
+      }
       const cfCheck = detectCloudflare(html);
 
       if (cfCheck.detected) {
@@ -693,6 +897,10 @@ class Scraper {
     });
 
     await this.createHero();
+
+    // Warmup initial session to establish browsing history
+    await this.warmupSession();
+
     let cfStreak = 0;
 
     try {
